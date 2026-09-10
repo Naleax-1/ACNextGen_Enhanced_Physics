@@ -1,0 +1,245 @@
+{
+  "measured_at_utc": "2026-09-10T15:00:38.762553+00:00",
+  "platform": "Linux-6.1.155-x86_64-with-glibc2.41",
+  "python": "3.13.14",
+  "git_head_at_measurement": "f8d725f68168539b356b0022547a87debbf8af6b",
+  "source_sha256": {
+    "Engine/brake.lua": "f5819a22667e39e28c57e0d6d9e41f82fd34e51e8da4147bf51e3eb18f7c14f3",
+    "Engine/compiler.lua": "7e2eeaae21bb312755055f7e5caa0824553e5472613d0c4146a7865a39d11e93",
+    "Engine/config.lua": "3cd8bf0107609bb77bf834b562b61f2bce0bd2734667becb32a032e5aa95bf3a",
+    "Engine/json.lua": "57773ce02fd1b08ac0880c2819f5517e5defd4f7f3af861fd9852cc1ceb95ef9",
+    "Engine/loader.lua": "60447a86b3259cf424d1108826339661b11cb9d827ee340f4ad6891ca4d83841",
+    "Engine/migration.lua": "a12e12c4fcc1ed9845545c9b56b609d57acfd55d486831c7dbd4c390c69d0ae1",
+    "Engine/result_bus.lua": "3512ccd20544fe779e9f856594360cbaeab91c8c598193bdf532460749372b09",
+    "Send/physics.lua": "a2b3ebf2435300bd1a1431d970b1bbf0ca7cf8d8d786b8c6761da0c26f6bf2be",
+    "modules/brake_fade.json": "83fa9c440b5693456c38d01802c7a32458437c0e1f715918c0946262a178929c",
+    "tests/benchmark.lua": "2646559c0705b56f22b741a8b27552af918444a1512879baf878eafccb42fa9c"
+  },
+  "interpretation": "Microbenchmark only. Ratios below 1 mean faster pilot CPU; no FPS or whole-app inference. Memory figures are incremental Lua heap, not process RSS, startup footprint or peak usage.",
+  "runtimes": [
+    {
+      "dt": 0.05,
+      "scope": "brake_fade only; table-backed mock ac.load/ac.store; default GC; no AC, CSP, rendering or real physics output",
+      "legacy": [
+        {
+          "retained_heap_delta_kib_1000_updates": 0,
+          "cpu_us_per_update": 18.09865,
+          "startup_ms": 0.46199999999999714,
+          "transient_heap_delta_kib_1000_updates": 7607.8125
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": 0,
+          "cpu_us_per_update": 19.337199999999992,
+          "startup_ms": 0.3790000000000182,
+          "transient_heap_delta_kib_1000_updates": 7607.8125
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": 0,
+          "cpu_us_per_update": 19.2835,
+          "startup_ms": 0.37200000000003897,
+          "transient_heap_delta_kib_1000_updates": 7607.8125
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": 0,
+          "cpu_us_per_update": 18.703949999999978,
+          "startup_ms": 0.39900000000026026,
+          "transient_heap_delta_kib_1000_updates": 7607.8125
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": 0,
+          "cpu_us_per_update": 18.946350000000002,
+          "startup_ms": 0.38899999999975066,
+          "transient_heap_delta_kib_1000_updates": 7607.8125
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": 0,
+          "cpu_us_per_update": 18.738600000000005,
+          "startup_ms": 0.37200000000003897,
+          "transient_heap_delta_kib_1000_updates": 7607.8125
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": 0,
+          "cpu_us_per_update": 18.76184999999997,
+          "startup_ms": 0.3690000000000637,
+          "transient_heap_delta_kib_1000_updates": 7607.8125
+        }
+      ],
+      "runtime": "LuaJIT 2.1.1774896198",
+      "updates_per_sample": 20000,
+      "warmup_updates": 2000,
+      "rounds": 7,
+      "pilot": [
+        {
+          "retained_heap_delta_kib_1000_updates": -1,
+          "cpu_us_per_update": 6.63435,
+          "startup_ms": 7.780999999999983,
+          "transient_heap_delta_kib_1000_updates": 0
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": -1,
+          "cpu_us_per_update": 8.623150000000003,
+          "startup_ms": 8.705999999999992,
+          "transient_heap_delta_kib_1000_updates": 0
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": -1,
+          "cpu_us_per_update": 9.173299999999996,
+          "startup_ms": 8.175000000000043,
+          "transient_heap_delta_kib_1000_updates": 0
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": -1,
+          "cpu_us_per_update": 9.84670000000001,
+          "startup_ms": 5.718000000000112,
+          "transient_heap_delta_kib_1000_updates": 0
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": -1,
+          "cpu_us_per_update": 9.471799999999986,
+          "startup_ms": 4.767000000000188,
+          "transient_heap_delta_kib_1000_updates": 0
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": -1,
+          "cpu_us_per_update": 9.746199999999993,
+          "startup_ms": 4.713000000000189,
+          "transient_heap_delta_kib_1000_updates": 0
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": -1,
+          "cpu_us_per_update": 9.473300000000018,
+          "startup_ms": 4.174000000000788,
+          "transient_heap_delta_kib_1000_updates": 0
+        }
+      ],
+      "observer_enabled": false,
+      "median": {
+        "legacy": {
+          "retained_heap_delta_kib_1000_updates": 0,
+          "cpu_us_per_update": 18.76184999999997,
+          "startup_ms": 0.3790000000000182,
+          "transient_heap_delta_kib_1000_updates": 7607.8125
+        },
+        "pilot": {
+          "retained_heap_delta_kib_1000_updates": -1,
+          "cpu_us_per_update": 9.471799999999986,
+          "startup_ms": 5.718000000000112,
+          "transient_heap_delta_kib_1000_updates": 0
+        }
+      },
+      "pilot_to_legacy_cpu_ratio": 0.5048436055079857
+    },
+    {
+      "rounds": 7,
+      "updates_per_sample": 20000,
+      "legacy": [
+        {
+          "retained_heap_delta_kib_1000_updates": 0.0,
+          "transient_heap_delta_kib_1000_updates": 6862.763671875,
+          "startup_ms": 0.38300000000024426,
+          "cpu_us_per_update": 40.472949999999976
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": 0.0,
+          "transient_heap_delta_kib_1000_updates": 6862.763671875,
+          "startup_ms": 0.6159999999999499,
+          "cpu_us_per_update": 41.65379999999996
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": 0.0,
+          "transient_heap_delta_kib_1000_updates": 6862.763671875,
+          "startup_ms": 2.968999999998445,
+          "cpu_us_per_update": 41.04410000000005
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": 0.0,
+          "transient_heap_delta_kib_1000_updates": 6862.763671875,
+          "startup_ms": 0.5680000000012342,
+          "cpu_us_per_update": 41.469899999999974
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": 0.0,
+          "transient_heap_delta_kib_1000_updates": 6862.763671875,
+          "startup_ms": 3.0640000000001777,
+          "cpu_us_per_update": 41.258200000000045
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": 0.0,
+          "transient_heap_delta_kib_1000_updates": 6862.763671875,
+          "startup_ms": 0.5450000000006838,
+          "cpu_us_per_update": 41.729350000000046
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": 0.0,
+          "transient_heap_delta_kib_1000_updates": 6862.763671875,
+          "startup_ms": 2.8719999999999857,
+          "cpu_us_per_update": 41.564900000000016
+        }
+      ],
+      "runtime": "Lua 5.4",
+      "warmup_updates": 2000,
+      "dt": 0.05,
+      "observer_enabled": false,
+      "scope": "brake_fade only; table-backed mock ac.load/ac.store; default GC; no AC, CSP, rendering or real physics output",
+      "pilot": [
+        {
+          "retained_heap_delta_kib_1000_updates": 0.0,
+          "transient_heap_delta_kib_1000_updates": 0.3125,
+          "startup_ms": 12.260999999999633,
+          "cpu_us_per_update": 31.721000000000025
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": 0.0,
+          "transient_heap_delta_kib_1000_updates": 0.3125,
+          "startup_ms": 9.394999999999598,
+          "cpu_us_per_update": 32.88760000000001
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": 0.0,
+          "transient_heap_delta_kib_1000_updates": 0.3125,
+          "startup_ms": 13.01800000000064,
+          "cpu_us_per_update": 32.33275000000004
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": 0.0,
+          "transient_heap_delta_kib_1000_updates": 0.3125,
+          "startup_ms": 9.401999999999688,
+          "cpu_us_per_update": 32.88235000000004
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": 0.0,
+          "transient_heap_delta_kib_1000_updates": 0.3125,
+          "startup_ms": 11.93500000000114,
+          "cpu_us_per_update": 32.30344999999994
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": 0.0,
+          "transient_heap_delta_kib_1000_updates": 0.3125,
+          "startup_ms": 9.453999999999851,
+          "cpu_us_per_update": 31.946649999999988
+        },
+        {
+          "retained_heap_delta_kib_1000_updates": 0.0,
+          "transient_heap_delta_kib_1000_updates": 0.3125,
+          "startup_ms": 11.798000000000641,
+          "cpu_us_per_update": 31.844350000000073
+        }
+      ],
+      "median": {
+        "legacy": {
+          "retained_heap_delta_kib_1000_updates": 0.0,
+          "transient_heap_delta_kib_1000_updates": 6862.763671875,
+          "startup_ms": 0.6159999999999499,
+          "cpu_us_per_update": 41.469899999999974
+        },
+        "pilot": {
+          "retained_heap_delta_kib_1000_updates": 0.0,
+          "transient_heap_delta_kib_1000_updates": 0.3125,
+          "startup_ms": 11.798000000000641,
+          "cpu_us_per_update": 32.30344999999994
+        }
+      },
+      "pilot_to_legacy_cpu_ratio": 0.7789613671602768
+    }
+  ]
+}

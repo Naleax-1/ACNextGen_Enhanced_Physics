@@ -329,14 +329,6 @@ local moduleHz = {
     wheel_audit = 2,
 }
 
--- Pilot integration does not change moduleDefs, moduleHz or safeUpdate's dt policy.
-local migration = nil
-local migrationOK, migrationResult = pcall(function()
-    return require("Engine.migration").new(moduleDefs, moduleHz)
-end)
-if migrationOK then migration = migrationResult
-else log("Definition pilot unavailable; legacy retained: " .. tostring(migrationResult)) end
-
 local modules = {}
 local observerModule = nil
 
@@ -466,9 +458,7 @@ local function loadModules()
             setEntryStatus(entry, "DISABLED", nil)
             modules[#modules + 1] = entry
         else
-            local mod, err
-            if migration and migration.resolve then mod = migration.resolve(def.name) end
-            if not mod then mod, err = safeRequire(def.name) end
+            local mod, err = safeRequire(def.name)
 
             entry.module = mod
             entry.loaded = mod ~= nil
@@ -713,8 +703,6 @@ function update(dt)
         storeRuntime()
     end
 
-    -- Observation is optional and runs after physics and output; it cannot gate Send.
-    if migration and migration.updateObserver then migration.updateObserver(dt) end
     stepGC(dt)
 end
 
@@ -763,10 +751,6 @@ function windowMain()
         end
     else
         drawFallbackUI()
-    end
-    if migration and migration.drawUI then
-        local ok, err = pcall(migration.drawUI, ui)
-        if not ok then setRuntimeError("definition.observer", err) end
     end
 end
 

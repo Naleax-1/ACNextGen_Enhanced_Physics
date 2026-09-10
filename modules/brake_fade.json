@@ -1,0 +1,2297 @@
+{
+  "module_id": "brake_fade",
+  "version": 1,
+  "category": "brake",
+  "source": {
+    "path": "Legacy/modules/brake_fade.lua",
+    "sha256": "00db6e74d7d55b02873af42f31c4b222a201e378d642a38bce862dcf56fea380",
+    "baseline_commit": "2f2ecb9",
+    "note": "State flags reset every update even when global inputs are not reread. BAD DT exports globals only. init does not reset wheel memory."
+  },
+  "wheels": {
+    "first": 0,
+    "last": 3
+  },
+  "inputs": {
+    "condition": {
+      "keys": [
+        "ngp_condition_brake",
+        "ngp_vehicle_brake_condition"
+      ],
+      "wheel": false,
+      "selection": "lua_or"
+    },
+    "chassisEnergy": {
+      "keys": [
+        "ngp_chassis_energy",
+        "ngp_chassis_body_energy"
+      ],
+      "wheel": false,
+      "selection": "lua_or"
+    },
+    "suspension": {
+      "keys": [
+        "ngp_weight_suspension_stress",
+        "ngp_chassis_flex_suspension_stress",
+        "ngp_body_suspension_stress"
+      ],
+      "wheel": false,
+      "selection": "lua_or"
+    },
+    "thermal": {
+      "keys": [
+        "ngp_brake_root_heat_avg",
+        "ngp_virtual_thermal_stress",
+        "ngp_chassis_roll_thermal_stress"
+      ],
+      "wheel": false,
+      "selection": "lua_or"
+    },
+    "brakeInput": {
+      "keys": [
+        "ngp_brake_input_smoothed",
+        "ngp_brake_input"
+      ],
+      "wheel": false,
+      "selection": "lua_or"
+    },
+    "cooling": {
+      "keys": [
+        "ngp_brake_cooling"
+      ],
+      "wheel": false,
+      "selection": "lua_or"
+    },
+    "contactLoss": {
+      "keys": [
+        "ngp_tire_contact_loss_",
+        "ngp_tcr_contact_loss_"
+      ],
+      "wheel": true,
+      "selection": "lua_or"
+    },
+    "lock": {
+      "keys": [
+        "ngp_brake_lock_"
+      ],
+      "wheel": true,
+      "selection": "lua_or"
+    },
+    "rootHeat": {
+      "keys": [
+        "ngp_brake_root_heat_"
+      ],
+      "wheel": true,
+      "selection": "lua_or"
+    },
+    "temperature": {
+      "keys": [
+        "ngp_brake_disc_temp_",
+        "ngp_brake_temp_"
+      ],
+      "wheel": true,
+      "selection": "lua_or"
+    }
+  },
+  "parameters": {
+    "normalMu": 1.0,
+    "fadeStart": 350.0,
+    "fadeEnd": 750.0,
+    "minMu": 0.55,
+    "recoveryTau": 3.0,
+    "minTau": 0.05,
+    "contactLossFadeGain": 0.08,
+    "lockFadeGain": 0.06,
+    "vehicleConditionFadeGain": 0.08,
+    "rootHeatFadeGain": 0.08,
+    "chassisEnergyFadeGain": 0.05,
+    "suspensionStressFadeGain": 0.05,
+    "thermalStressFadeGain": 0.06,
+    "brakeInputFadeGain": 0.04,
+    "coolingRecoveryGain": 0.06,
+    "maxRootFadeAdd": 0.2,
+    "globalReadInterval": 0.05,
+    "debugStoreInterval": 0.25
+  },
+  "constants": {
+    "averageFactor": 0.25
+  },
+  "formula": {
+    "resetLinks": {
+      "scope": "global",
+      "steps": [
+        {
+          "set": {
+            "state": "brakeSystemLinked"
+          },
+          "value": false
+        },
+        {
+          "set": {
+            "state": "lockLinked"
+          },
+          "value": false
+        },
+        {
+          "set": {
+            "state": "tireLinked"
+          },
+          "value": false
+        },
+        {
+          "set": {
+            "state": "conditionLinked"
+          },
+          "value": false
+        },
+        {
+          "set": {
+            "state": "rootHeatLinked"
+          },
+          "value": false
+        },
+        {
+          "set": {
+            "state": "chassisLinked"
+          },
+          "value": false
+        },
+        {
+          "set": {
+            "state": "suspensionLinked"
+          },
+          "value": false
+        },
+        {
+          "set": {
+            "state": "thermalLinked"
+          },
+          "value": false
+        },
+        {
+          "set": {
+            "state": "brakeInputLinked"
+          },
+          "value": false
+        },
+        {
+          "set": {
+            "state": "coolingLinked"
+          },
+          "value": false
+        }
+      ]
+    },
+    "timers": {
+      "scope": "global",
+      "steps": [
+        {
+          "dt": {
+            "op": "num",
+            "args": [
+              {
+                "dt": true
+              },
+              0
+            ]
+          }
+        },
+        {
+          "set": {
+            "state": "globalReadTimer"
+          },
+          "value": {
+            "op": "add",
+            "args": [
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "state": "globalReadTimer"
+                  },
+                  999
+                ]
+              },
+              {
+                "dt": true
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "state": "debugStoreTimer"
+          },
+          "value": {
+            "op": "add",
+            "args": [
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "state": "debugStoreTimer"
+                  },
+                  999
+                ]
+              },
+              {
+                "dt": true
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "state": "debugStoreNow"
+          },
+          "value": false
+        },
+        {
+          "branch": {
+            "op": "ge",
+            "args": [
+              {
+                "state": "debugStoreTimer"
+              },
+              {
+                "parameter": "debugStoreInterval"
+              }
+            ]
+          },
+          "yes": [
+            {
+              "set": {
+                "state": "debugStoreTimer"
+              },
+              "value": 0
+            },
+            {
+              "set": {
+                "state": "debugStoreNow"
+              },
+              "value": true
+            }
+          ],
+          "no": []
+        }
+      ]
+    },
+    "readGlobal": {
+      "scope": "global",
+      "steps": [
+        {
+          "read": "condition",
+          "into": "raw"
+        },
+        {
+          "set": {
+            "state": "conditionLinked"
+          },
+          "value": {
+            "op": "not_nil",
+            "args": [
+              {
+                "temporary": "raw"
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "state": "vehicleCondition"
+          },
+          "value": {
+            "op": "clamp",
+            "args": [
+              {
+                "op": "num",
+                "args": [
+                  {
+                    "temporary": "raw"
+                  },
+                  0
+                ]
+              },
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "read": "chassisEnergy",
+          "into": "raw"
+        },
+        {
+          "set": {
+            "state": "chassisLinked"
+          },
+          "value": {
+            "op": "not_nil",
+            "args": [
+              {
+                "temporary": "raw"
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "state": "chassisEnergy"
+          },
+          "value": {
+            "op": "clamp",
+            "args": [
+              {
+                "op": "num",
+                "args": [
+                  {
+                    "temporary": "raw"
+                  },
+                  0
+                ]
+              },
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "read": "suspension",
+          "into": "raw"
+        },
+        {
+          "set": {
+            "state": "suspensionLinked"
+          },
+          "value": {
+            "op": "not_nil",
+            "args": [
+              {
+                "temporary": "raw"
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "state": "suspensionStress"
+          },
+          "value": {
+            "op": "clamp",
+            "args": [
+              {
+                "op": "num",
+                "args": [
+                  {
+                    "temporary": "raw"
+                  },
+                  0
+                ]
+              },
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "read": "thermal",
+          "into": "raw"
+        },
+        {
+          "set": {
+            "state": "thermalLinked"
+          },
+          "value": {
+            "op": "not_nil",
+            "args": [
+              {
+                "temporary": "raw"
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "state": "thermalStress"
+          },
+          "value": {
+            "op": "clamp",
+            "args": [
+              {
+                "op": "num",
+                "args": [
+                  {
+                    "temporary": "raw"
+                  },
+                  0
+                ]
+              },
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "read": "brakeInput",
+          "into": "raw"
+        },
+        {
+          "set": {
+            "state": "brakeInputLinked"
+          },
+          "value": {
+            "op": "not_nil",
+            "args": [
+              {
+                "temporary": "raw"
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "state": "brakeInput"
+          },
+          "value": {
+            "op": "clamp",
+            "args": [
+              {
+                "op": "num",
+                "args": [
+                  {
+                    "temporary": "raw"
+                  },
+                  0
+                ]
+              },
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "read": "cooling",
+          "into": "raw"
+        },
+        {
+          "set": {
+            "state": "coolingLinked"
+          },
+          "value": {
+            "op": "not_nil",
+            "args": [
+              {
+                "temporary": "raw"
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "state": "cooling"
+          },
+          "value": {
+            "op": "clamp",
+            "args": [
+              {
+                "op": "num",
+                "args": [
+                  {
+                    "temporary": "raw"
+                  },
+                  0
+                ]
+              },
+              0,
+              2
+            ]
+          }
+        }
+      ]
+    },
+    "readWheel": {
+      "scope": "wheel",
+      "steps": [
+        {
+          "read": "contactLoss",
+          "into": "raw"
+        },
+        {
+          "branch": {
+            "op": "not_nil",
+            "args": [
+              {
+                "temporary": "raw"
+              }
+            ]
+          },
+          "yes": [
+            {
+              "set": {
+                "state": "tireLinked"
+              },
+              "value": true
+            }
+          ],
+          "no": []
+        },
+        {
+          "set": {
+            "state": "contactLoss",
+            "wheel": true
+          },
+          "value": {
+            "op": "clamp",
+            "args": [
+              {
+                "op": "num",
+                "args": [
+                  {
+                    "temporary": "raw"
+                  },
+                  0
+                ]
+              },
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "read": "lock",
+          "into": "raw"
+        },
+        {
+          "branch": {
+            "op": "not_nil",
+            "args": [
+              {
+                "temporary": "raw"
+              }
+            ]
+          },
+          "yes": [
+            {
+              "set": {
+                "state": "lockLinked"
+              },
+              "value": true
+            }
+          ],
+          "no": []
+        },
+        {
+          "set": {
+            "state": "lock",
+            "wheel": true
+          },
+          "value": {
+            "op": "clamp",
+            "args": [
+              {
+                "op": "num",
+                "args": [
+                  {
+                    "temporary": "raw"
+                  },
+                  0
+                ]
+              },
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "read": "rootHeat",
+          "into": "raw"
+        },
+        {
+          "branch": {
+            "op": "not_nil",
+            "args": [
+              {
+                "temporary": "raw"
+              }
+            ]
+          },
+          "yes": [
+            {
+              "set": {
+                "state": "rootHeatLinked"
+              },
+              "value": true
+            }
+          ],
+          "no": []
+        },
+        {
+          "set": {
+            "state": "rootHeat",
+            "wheel": true
+          },
+          "value": {
+            "op": "clamp",
+            "args": [
+              {
+                "op": "num",
+                "args": [
+                  {
+                    "temporary": "raw"
+                  },
+                  0
+                ]
+              },
+              0,
+              1
+            ]
+          }
+        }
+      ]
+    },
+    "readTemperature": {
+      "scope": "wheel",
+      "steps": [
+        {
+          "read": "temperature",
+          "into": "raw"
+        },
+        {
+          "branch": {
+            "op": "not_nil",
+            "args": [
+              {
+                "temporary": "raw"
+              }
+            ]
+          },
+          "yes": [
+            {
+              "set": {
+                "state": "brakeSystemLinked"
+              },
+              "value": true
+            }
+          ],
+          "no": []
+        },
+        {
+          "set": {
+            "state": "temp",
+            "wheel": true
+          },
+          "value": {
+            "op": "num",
+            "args": [
+              {
+                "temporary": "raw"
+              },
+              25
+            ]
+          }
+        }
+      ]
+    },
+    "calculateTarget": {
+      "scope": "wheel",
+      "steps": [
+        {
+          "set": {
+            "temporary": "temperature"
+          },
+          "value": {
+            "op": "or",
+            "args": [
+              {
+                "state": "temp",
+                "wheel": true
+              },
+              25
+            ]
+          }
+        },
+        {
+          "branch": {
+            "op": "le",
+            "args": [
+              {
+                "temporary": "temperature"
+              },
+              {
+                "parameter": "fadeStart"
+              }
+            ]
+          },
+          "yes": [
+            {
+              "set": {
+                "temporary": "tempFade"
+              },
+              "value": 0
+            }
+          ],
+          "no": [
+            {
+              "set": {
+                "temporary": "range"
+              },
+              "value": {
+                "op": "max",
+                "args": [
+                  {
+                    "op": "sub",
+                    "args": [
+                      {
+                        "parameter": "fadeEnd"
+                      },
+                      {
+                        "parameter": "fadeStart"
+                      }
+                    ]
+                  },
+                  1
+                ]
+              }
+            },
+            {
+              "set": {
+                "temporary": "tempFade"
+              },
+              "value": {
+                "op": "clamp",
+                "args": [
+                  {
+                    "op": "div",
+                    "args": [
+                      {
+                        "op": "sub",
+                        "args": [
+                          {
+                            "temporary": "temperature"
+                          },
+                          {
+                            "parameter": "fadeStart"
+                          }
+                        ]
+                      },
+                      {
+                        "temporary": "range"
+                      }
+                    ]
+                  },
+                  0,
+                  1
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "set": {
+            "temporary": "rootAdd"
+          },
+          "value": {
+            "op": "add",
+            "args": [
+              {
+                "op": "add",
+                "args": [
+                  {
+                    "op": "add",
+                    "args": [
+                      {
+                        "op": "add",
+                        "args": [
+                          {
+                            "op": "mul",
+                            "args": [
+                              {
+                                "state": "rootHeat",
+                                "wheel": true
+                              },
+                              {
+                                "parameter": "rootHeatFadeGain"
+                              }
+                            ]
+                          },
+                          {
+                            "op": "mul",
+                            "args": [
+                              {
+                                "state": "chassisEnergy"
+                              },
+                              {
+                                "parameter": "chassisEnergyFadeGain"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "op": "mul",
+                        "args": [
+                          {
+                            "state": "suspensionStress"
+                          },
+                          {
+                            "parameter": "suspensionStressFadeGain"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "mul",
+                    "args": [
+                      {
+                        "state": "thermalStress"
+                      },
+                      {
+                        "parameter": "thermalStressFadeGain"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "op": "mul",
+                "args": [
+                  {
+                    "state": "brakeInput"
+                  },
+                  {
+                    "parameter": "brakeInputFadeGain"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "temporary": "rootAdd"
+          },
+          "value": {
+            "op": "clamp",
+            "args": [
+              {
+                "temporary": "rootAdd"
+              },
+              0,
+              {
+                "parameter": "maxRootFadeAdd"
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "state": "rootFadeAdd",
+            "wheel": true
+          },
+          "value": {
+            "temporary": "rootAdd"
+          }
+        },
+        {
+          "set": {
+            "temporary": "fade"
+          },
+          "value": {
+            "op": "add",
+            "args": [
+              {
+                "op": "add",
+                "args": [
+                  {
+                    "op": "add",
+                    "args": [
+                      {
+                        "op": "add",
+                        "args": [
+                          {
+                            "temporary": "tempFade"
+                          },
+                          {
+                            "op": "mul",
+                            "args": [
+                              {
+                                "state": "contactLoss",
+                                "wheel": true
+                              },
+                              {
+                                "parameter": "contactLossFadeGain"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "op": "mul",
+                        "args": [
+                          {
+                            "state": "lock",
+                            "wheel": true
+                          },
+                          {
+                            "parameter": "lockFadeGain"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "mul",
+                    "args": [
+                      {
+                        "state": "vehicleCondition"
+                      },
+                      {
+                        "parameter": "vehicleConditionFadeGain"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "temporary": "rootAdd"
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "temporary": "fade"
+          },
+          "value": {
+            "op": "clamp",
+            "args": [
+              {
+                "temporary": "fade"
+              },
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "set": {
+            "state": "fade",
+            "wheel": true
+          },
+          "value": {
+            "temporary": "fade"
+          }
+        },
+        {
+          "set": {
+            "state": "targetMu",
+            "wheel": true
+          },
+          "value": {
+            "op": "clamp",
+            "args": [
+              {
+                "op": "sub",
+                "args": [
+                  {
+                    "parameter": "normalMu"
+                  },
+                  {
+                    "op": "mul",
+                    "args": [
+                      {
+                        "temporary": "fade"
+                      },
+                      {
+                        "op": "sub",
+                        "args": [
+                          {
+                            "parameter": "normalMu"
+                          },
+                          {
+                            "parameter": "minMu"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "parameter": "minMu"
+              },
+              {
+                "parameter": "normalMu"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "smoothMu": {
+      "scope": "wheel",
+      "steps": [
+        {
+          "set": {
+            "temporary": "current"
+          },
+          "value": {
+            "op": "num",
+            "args": [
+              {
+                "state": "mu",
+                "wheel": true
+              },
+              0
+            ]
+          }
+        },
+        {
+          "set": {
+            "temporary": "target"
+          },
+          "value": {
+            "op": "num",
+            "args": [
+              {
+                "state": "targetMu",
+                "wheel": true
+              },
+              0
+            ]
+          }
+        },
+        {
+          "set": {
+            "temporary": "smoothDt"
+          },
+          "value": {
+            "op": "num",
+            "args": [
+              {
+                "dt": true
+              },
+              0
+            ]
+          }
+        },
+        {
+          "set": {
+            "temporary": "smoothTau"
+          },
+          "value": {
+            "op": "max",
+            "args": [
+              {
+                "op": "num",
+                "args": [
+                  {
+                    "temporary": "tau"
+                  },
+                  {
+                    "parameter": "minTau"
+                  }
+                ]
+              },
+              {
+                "parameter": "minTau"
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "temporary": "alpha"
+          },
+          "value": {
+            "op": "div",
+            "args": [
+              {
+                "temporary": "smoothDt"
+              },
+              {
+                "op": "add",
+                "args": [
+                  {
+                    "temporary": "smoothTau"
+                  },
+                  {
+                    "temporary": "smoothDt"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "temporary": "alpha"
+          },
+          "value": {
+            "op": "clamp",
+            "args": [
+              {
+                "temporary": "alpha"
+              },
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "set": {
+            "state": "mu",
+            "wheel": true
+          },
+          "value": {
+            "op": "add",
+            "args": [
+              {
+                "temporary": "current"
+              },
+              {
+                "op": "mul",
+                "args": [
+                  {
+                    "op": "sub",
+                    "args": [
+                      {
+                        "temporary": "target"
+                      },
+                      {
+                        "temporary": "current"
+                      }
+                    ]
+                  },
+                  {
+                    "temporary": "alpha"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "state": "mu",
+            "wheel": true
+          },
+          "value": {
+            "op": "clamp",
+            "args": [
+              {
+                "state": "mu",
+                "wheel": true
+              },
+              {
+                "parameter": "minMu"
+              },
+              {
+                "parameter": "normalMu"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "summary": {
+      "scope": "global",
+      "steps": [
+        {
+          "set": {
+            "temporary": "sumMu"
+          },
+          "value": 0
+        },
+        {
+          "set": {
+            "temporary": "sumFade"
+          },
+          "value": 0
+        },
+        {
+          "set": {
+            "temporary": "sumRootAdd"
+          },
+          "value": 0
+        },
+        {
+          "set": {
+            "temporary": "sumTemp"
+          },
+          "value": 0
+        },
+        {
+          "set": {
+            "temporary": "minMuNow"
+          },
+          "value": 1
+        },
+        {
+          "foreach_wheel": [
+            {
+              "set": {
+                "temporary": "sumMu"
+              },
+              "value": {
+                "op": "add",
+                "args": [
+                  {
+                    "temporary": "sumMu"
+                  },
+                  {
+                    "op": "or",
+                    "args": [
+                      {
+                        "state": "mu",
+                        "wheel": true
+                      },
+                      1
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "set": {
+                "temporary": "sumFade"
+              },
+              "value": {
+                "op": "add",
+                "args": [
+                  {
+                    "temporary": "sumFade"
+                  },
+                  {
+                    "op": "or",
+                    "args": [
+                      {
+                        "state": "fade",
+                        "wheel": true
+                      },
+                      0
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "set": {
+                "temporary": "sumRootAdd"
+              },
+              "value": {
+                "op": "add",
+                "args": [
+                  {
+                    "temporary": "sumRootAdd"
+                  },
+                  {
+                    "op": "or",
+                    "args": [
+                      {
+                        "state": "rootFadeAdd",
+                        "wheel": true
+                      },
+                      0
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "set": {
+                "temporary": "sumTemp"
+              },
+              "value": {
+                "op": "add",
+                "args": [
+                  {
+                    "temporary": "sumTemp"
+                  },
+                  {
+                    "op": "or",
+                    "args": [
+                      {
+                        "state": "temp",
+                        "wheel": true
+                      },
+                      25
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "set": {
+                "temporary": "minMuNow"
+              },
+              "value": {
+                "op": "min",
+                "args": [
+                  {
+                    "temporary": "minMuNow"
+                  },
+                  {
+                    "op": "or",
+                    "args": [
+                      {
+                        "state": "mu",
+                        "wheel": true
+                      },
+                      1
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "set": {
+            "state": "avgMu"
+          },
+          "value": {
+            "op": "mul",
+            "args": [
+              {
+                "temporary": "sumMu"
+              },
+              {
+                "constant": "averageFactor"
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "state": "avgFade"
+          },
+          "value": {
+            "op": "mul",
+            "args": [
+              {
+                "temporary": "sumFade"
+              },
+              {
+                "constant": "averageFactor"
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "state": "avgRootAdd"
+          },
+          "value": {
+            "op": "mul",
+            "args": [
+              {
+                "temporary": "sumRootAdd"
+              },
+              {
+                "constant": "averageFactor"
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "state": "avgTemp"
+          },
+          "value": {
+            "op": "mul",
+            "args": [
+              {
+                "temporary": "sumTemp"
+              },
+              {
+                "constant": "averageFactor"
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "state": "minMuNow"
+          },
+          "value": {
+            "temporary": "minMuNow"
+          }
+        }
+      ]
+    },
+    "exportGlobal": {
+      "scope": "global",
+      "steps": [
+        {
+          "publish": "global"
+        },
+        {
+          "branch": {
+            "state": "debugStoreNow"
+          },
+          "yes": [
+            {
+              "publish": "debug"
+            }
+          ],
+          "no": []
+        }
+      ]
+    },
+    "initialize": {
+      "scope": "global",
+      "steps": [
+        {
+          "set": {
+            "state": "status"
+          },
+          "value": {
+            "literal": "INIT"
+          }
+        },
+        {
+          "set": {
+            "state": "updateCount"
+          },
+          "value": 0
+        },
+        {
+          "set": {
+            "state": "globalReadTimer"
+          },
+          "value": 999
+        },
+        {
+          "set": {
+            "state": "debugStoreTimer"
+          },
+          "value": 999
+        },
+        {
+          "set": {
+            "state": "debugStoreNow"
+          },
+          "value": true
+        },
+        {
+          "call": "summary"
+        },
+        {
+          "foreach_wheel": [
+            {
+              "publish": "wheel"
+            }
+          ]
+        },
+        {
+          "call": "exportGlobal"
+        }
+      ]
+    },
+    "update": {
+      "scope": "global",
+      "steps": [
+        {
+          "dt": {
+            "op": "num",
+            "args": [
+              {
+                "dt": true
+              },
+              0
+            ]
+          }
+        },
+        {
+          "set": {
+            "state": "updateCount"
+          },
+          "value": {
+            "op": "add",
+            "args": [
+              {
+                "op": "or",
+                "args": [
+                  {
+                    "state": "updateCount"
+                  },
+                  0
+                ]
+              },
+              1
+            ]
+          }
+        },
+        {
+          "branch": {
+            "op": "le",
+            "args": [
+              {
+                "dt": true
+              },
+              0
+            ]
+          },
+          "yes": [
+            {
+              "set": {
+                "state": "status"
+              },
+              "value": {
+                "literal": "BAD DT"
+              }
+            },
+            {
+              "call": "exportGlobal"
+            },
+            {
+              "stop": true
+            }
+          ],
+          "no": []
+        },
+        {
+          "call": "timers"
+        },
+        {
+          "call": "resetLinks"
+        },
+        {
+          "branch": {
+            "op": "ge",
+            "args": [
+              {
+                "state": "globalReadTimer"
+              },
+              {
+                "parameter": "globalReadInterval"
+              }
+            ]
+          },
+          "yes": [
+            {
+              "set": {
+                "state": "globalReadTimer"
+              },
+              "value": 0
+            },
+            {
+              "call": "readGlobal"
+            }
+          ],
+          "no": []
+        },
+        {
+          "set": {
+            "state": "status"
+          },
+          "value": {
+            "literal": "RUNNING"
+          }
+        },
+        {
+          "set": {
+            "temporary": "tau"
+          },
+          "value": {
+            "op": "div",
+            "args": [
+              {
+                "parameter": "recoveryTau"
+              },
+              {
+                "op": "add",
+                "args": [
+                  1,
+                  {
+                    "op": "mul",
+                    "args": [
+                      {
+                        "op": "or",
+                        "args": [
+                          {
+                            "state": "cooling"
+                          },
+                          0
+                        ]
+                      },
+                      {
+                        "parameter": "coolingRecoveryGain"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "set": {
+            "temporary": "tau"
+          },
+          "value": {
+            "op": "max",
+            "args": [
+              {
+                "temporary": "tau"
+              },
+              {
+                "parameter": "minTau"
+              }
+            ]
+          }
+        },
+        {
+          "foreach_wheel": [
+            {
+              "call": "readWheel"
+            },
+            {
+              "call": "readTemperature"
+            },
+            {
+              "call": "calculateTarget"
+            },
+            {
+              "call": "smoothMu"
+            },
+            {
+              "publish": "wheel"
+            }
+          ]
+        },
+        {
+          "call": "summary"
+        },
+        {
+          "call": "exportGlobal"
+        }
+      ]
+    }
+  },
+  "intermediate": {
+    "raw": {},
+    "temperature": {},
+    "tempFade": {},
+    "range": {},
+    "rootAdd": {},
+    "fade": {},
+    "current": {},
+    "target": {},
+    "smoothDt": {},
+    "smoothTau": {},
+    "alpha": {},
+    "tau": {},
+    "sumMu": {},
+    "sumFade": {},
+    "sumRootAdd": {},
+    "sumTemp": {},
+    "minMuNow": {}
+  },
+  "state": {
+    "mu": {
+      "initial": 1,
+      "wheel": true
+    },
+    "targetMu": {
+      "initial": 1,
+      "wheel": true
+    },
+    "temp": {
+      "initial": 25,
+      "wheel": true
+    },
+    "fade": {
+      "initial": 0,
+      "wheel": true
+    },
+    "contactLoss": {
+      "initial": 0,
+      "wheel": true
+    },
+    "lock": {
+      "initial": 0,
+      "wheel": true
+    },
+    "rootHeat": {
+      "initial": 0,
+      "wheel": true
+    },
+    "rootFadeAdd": {
+      "initial": 0,
+      "wheel": true
+    },
+    "avgMu": {
+      "initial": 1,
+      "wheel": false
+    },
+    "minMuNow": {
+      "initial": 1,
+      "wheel": false
+    },
+    "avgFade": {
+      "initial": 0,
+      "wheel": false
+    },
+    "avgRootAdd": {
+      "initial": 0,
+      "wheel": false
+    },
+    "avgTemp": {
+      "initial": 25,
+      "wheel": false
+    },
+    "vehicleCondition": {
+      "initial": 0,
+      "wheel": false
+    },
+    "chassisEnergy": {
+      "initial": 0,
+      "wheel": false
+    },
+    "suspensionStress": {
+      "initial": 0,
+      "wheel": false
+    },
+    "thermalStress": {
+      "initial": 0,
+      "wheel": false
+    },
+    "brakeInput": {
+      "initial": 0,
+      "wheel": false
+    },
+    "cooling": {
+      "initial": 0,
+      "wheel": false
+    },
+    "status": {
+      "initial": "INIT",
+      "wheel": false
+    },
+    "updateCount": {
+      "initial": 0,
+      "wheel": false
+    },
+    "globalReadTimer": {
+      "initial": 999,
+      "wheel": false
+    },
+    "debugStoreTimer": {
+      "initial": 999,
+      "wheel": false
+    },
+    "debugStoreNow": {
+      "initial": true,
+      "wheel": false
+    },
+    "brakeSystemLinked": {
+      "initial": false,
+      "wheel": false
+    },
+    "lockLinked": {
+      "initial": false,
+      "wheel": false
+    },
+    "tireLinked": {
+      "initial": false,
+      "wheel": false
+    },
+    "conditionLinked": {
+      "initial": false,
+      "wheel": false
+    },
+    "rootHeatLinked": {
+      "initial": false,
+      "wheel": false
+    },
+    "chassisLinked": {
+      "initial": false,
+      "wheel": false
+    },
+    "suspensionLinked": {
+      "initial": false,
+      "wheel": false
+    },
+    "thermalLinked": {
+      "initial": false,
+      "wheel": false
+    },
+    "brakeInputLinked": {
+      "initial": false,
+      "wheel": false
+    },
+    "coolingLinked": {
+      "initial": false,
+      "wheel": false
+    }
+  },
+  "dependencies": [
+    {
+      "module_id": "brake_system",
+      "timing": "earlier_slot",
+      "required": false,
+      "reason": "Disc temperature, root heat, smoothed brake input, cooling"
+    },
+    {
+      "module_id": "contact_quality",
+      "timing": "earlier_slot",
+      "required": false,
+      "reason": "Writes ngp_tire_contact_loss_ and ngp_tcr_contact_loss_ after tire_contact_response"
+    },
+    {
+      "module_id": "tire_contact_response",
+      "timing": "earlier_slot",
+      "required": false,
+      "reason": "Contact loss fallback alias"
+    },
+    {
+      "module_id": "brake_lock",
+      "timing": "latest_available",
+      "required": false,
+      "reason": "Later host slot: prior/latest lock output, never reorder"
+    },
+    {
+      "module_id": "vehicle_condition",
+      "timing": "latest_available",
+      "required": false,
+      "reason": "Later host slot: prior/latest condition output"
+    },
+    {
+      "module_id": "chassis_energy",
+      "timing": "earlier_slot",
+      "required": false,
+      "reason": "Chassis energy aliases"
+    },
+    {
+      "module_id": "weight_distribution",
+      "timing": "earlier_slot",
+      "required": false,
+      "reason": "Suspension stress primary"
+    },
+    {
+      "module_id": "chassis_flex",
+      "timing": "earlier_slot",
+      "required": false,
+      "reason": "Suspension stress fallback"
+    },
+    {
+      "module_id": "body_rigidity_estimator",
+      "timing": "earlier_slot",
+      "required": false,
+      "reason": "Body suspension stress fallback"
+    },
+    {
+      "module_id": "virtual_inertia",
+      "timing": "earlier_slot",
+      "required": false,
+      "reason": "Thermal stress fallback"
+    },
+    {
+      "module_id": "chassis_roll",
+      "timing": "earlier_slot",
+      "required": false,
+      "reason": "Writes ngp_chassis_roll_thermal_stress and the shared ngp_chassis_body_energy alias"
+    },
+    {
+      "module_id": "thermal",
+      "timing": "earlier_slot",
+      "required": false,
+      "reason": "Writes ngp_brake_root_heat_avg and ngp_virtual_thermal_stress; other earlier writers can overwrite these keys before this slot"
+    }
+  ],
+  "execution_order": {
+    "host_index": 45,
+    "target_hz": 10,
+    "policy": "preserve_host_slot"
+  },
+  "outputs": {
+    "wheel": [
+      {
+        "key": "ngp_brake_mu_",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "mu",
+              "wheel": true
+            },
+            1
+          ]
+        },
+        "wheel": true
+      },
+      {
+        "key": "ngp_brake_fade_",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "fade",
+              "wheel": true
+            },
+            0
+          ]
+        },
+        "wheel": true
+      },
+      {
+        "key": "ngp_brake_target_mu_",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "targetMu",
+              "wheel": true
+            },
+            1
+          ]
+        },
+        "wheel": true
+      },
+      {
+        "key": "ngp_brake_fade_temp_",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "temp",
+              "wheel": true
+            },
+            25
+          ]
+        },
+        "wheel": true
+      },
+      {
+        "key": "ngp_brake_fade_root_add_",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "rootFadeAdd",
+              "wheel": true
+            },
+            0
+          ]
+        },
+        "wheel": true
+      },
+      {
+        "key": "ngp_brake_fade_root_heat_",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "rootHeat",
+              "wheel": true
+            },
+            0
+          ]
+        },
+        "wheel": true
+      }
+    ],
+    "global": [
+      {
+        "key": "ngp_brake_fade_status",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "status"
+            },
+            {
+              "literal": "UNKNOWN"
+            }
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_update_count",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "updateCount"
+            },
+            0
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_mu_avg",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "avgMu"
+            },
+            1
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_mu_min",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "minMuNow"
+            },
+            1
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_avg",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "avgFade"
+            },
+            0
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_root_add_avg",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "avgRootAdd"
+            },
+            0
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_temp_avg",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "avgTemp"
+            },
+            25
+          ]
+        },
+        "wheel": false
+      }
+    ],
+    "debug": [
+      {
+        "key": "ngp_brake_fade_brake_system_linked",
+        "value": {
+          "op": "bool01",
+          "args": [
+            {
+              "state": "brakeSystemLinked"
+            }
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_lock_linked",
+        "value": {
+          "op": "bool01",
+          "args": [
+            {
+              "state": "lockLinked"
+            }
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_tire_linked",
+        "value": {
+          "op": "bool01",
+          "args": [
+            {
+              "state": "tireLinked"
+            }
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_condition_linked",
+        "value": {
+          "op": "bool01",
+          "args": [
+            {
+              "state": "conditionLinked"
+            }
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_root_heat_linked",
+        "value": {
+          "op": "bool01",
+          "args": [
+            {
+              "state": "rootHeatLinked"
+            }
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_chassis_linked",
+        "value": {
+          "op": "bool01",
+          "args": [
+            {
+              "state": "chassisLinked"
+            }
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_suspension_linked",
+        "value": {
+          "op": "bool01",
+          "args": [
+            {
+              "state": "suspensionLinked"
+            }
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_thermal_linked",
+        "value": {
+          "op": "bool01",
+          "args": [
+            {
+              "state": "thermalLinked"
+            }
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_input_linked",
+        "value": {
+          "op": "bool01",
+          "args": [
+            {
+              "state": "brakeInputLinked"
+            }
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_cooling_linked",
+        "value": {
+          "op": "bool01",
+          "args": [
+            {
+              "state": "coolingLinked"
+            }
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_vehicle_condition",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "vehicleCondition"
+            },
+            0
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_chassis_energy",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "chassisEnergy"
+            },
+            0
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_suspension_stress",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "suspensionStress"
+            },
+            0
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_thermal_stress",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "thermalStress"
+            },
+            0
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_input",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "brakeInput"
+            },
+            0
+          ]
+        },
+        "wheel": false
+      },
+      {
+        "key": "ngp_brake_fade_cooling",
+        "value": {
+          "op": "or",
+          "args": [
+            {
+              "state": "cooling"
+            },
+            0
+          ]
+        },
+        "wheel": false
+      }
+    ]
+  },
+  "entrypoints": {
+    "init": "initialize",
+    "update": "update"
+  }
+}
