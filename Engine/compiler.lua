@@ -13,6 +13,19 @@ local function clamp(value, lo, hi)
     if value > hi then return hi end
     return value
 end
+-- These reproduce source access semantics, including intentionally unprotected
+-- accesses represented by the separate direct mode. They add no physics model.
+local function safeField(object, key, fallback)
+    if not object then return fallback end
+    local ok, value = pcall(function() return object[key] end)
+    if not ok or value == nil then return fallback end
+    return value
+end
+local function protectedPath(object, first, second)
+    local ok, value = pcall(function() return object[first][second] end)
+    if ok then return value end
+    return nil
+end
 local function finite(v)
     return type(v) == 'number' and v == v and v ~= math.huge and v ~= -math.huge
 end
@@ -116,6 +129,40 @@ function M.prepare(d)
             only(e, {literal=true}); assert(type(e.literal) == 'string', 'invalid literal'); return quote(e.literal)
         end
         if e.dt then only(e, {dt=true}); assert(e.dt == true); return 'dt' end
+        if e.absent then only(e, {absent=true}); assert(e.absent == true); return 'nil' end
+        if e.context then
+            only(e, {context=true})
+            assert(e.context == 'car' or (e.context == 'wheel_index' and wheel), 'invalid context reference')
+            return e.context == 'car' and 'car' or 'i'
+        end
+        if e.get_car then only(e, {get_car=true}); assert(e.get_car == true); return 'getCar()' end
+        if e.access then
+            only(e, {access=true})
+            local access = e.access
+            only(access, {object=true,keys=true,mode=true,fallback=true})
+            local keys = array(access.keys)
+            assert(#keys >= 1 and #keys <= 2, 'access path must contain one or two keys')
+            local object, compiled = expression(access.object, wheel, depth), {}
+            for j, key in ipairs(keys) do
+                if type(key) == 'string' then name(key); compiled[j] = quote(key)
+                else
+                    only(key, {context=true})
+                    assert(key.context == 'wheel_index' and wheel, 'only current wheel index is allowed')
+                    compiled[j] = 'i'
+                end
+            end
+            if access.mode == 'safe_field' then
+                assert(#keys == 1 and access.fallback ~= nil, 'safe field requires one key and explicit fallback')
+                return 'safeField(' .. object .. ',' .. compiled[1] .. ',' .. expression(access.fallback, wheel, depth) .. ')'
+            end
+            assert(access.fallback == nil, 'fallback only allowed for safe_field')
+            if access.mode == 'protected_path' then
+                assert(#keys == 2, 'protected path requires two keys')
+                return 'protectedPath(' .. object .. ',' .. table.concat(compiled, ',') .. ')'
+            end
+            assert(access.mode == 'direct', 'invalid access mode')
+            return '(' .. object .. ')[' .. table.concat(compiled, '][') .. ']'
+        end
         if not e.op then return ref(e, wheel) end
         only(e, {op=true,args=true})
         local op, args = e.op, array(e.args)
@@ -177,7 +224,7 @@ function M.prepare(d)
                 local phase = assert(d.formula[stmt.call], 'unknown phase')
                 assert(phase.scope == 'global' or wheel, 'wheel phase outside wheel loop')
                 compilePhase(stmt.call)
-                lines[#lines + 1] = 'if f[' .. quote(stmt.call) .. '](dt,i) then return true end'
+                lines[#lines + 1] = 'if f[' .. quote(stmt.call) .. '](dt,i,car) then return true end'
             elseif stmt.foreach_wheel then
                 assert(not wheel, 'nested wheel loop')
                 lines[#lines + 1] = 'for i=0,3 do\n' .. block(stmt.foreach_wheel, true, depth + 1) .. '\nend'
@@ -202,7 +249,7 @@ function M.prepare(d)
         only(phase, {scope=true,steps=true})
         assert(phase.scope == 'global' or phase.scope == 'wheel', 'invalid phase scope')
         local body = block(phase.steps, phase.scope == 'wheel', 1)
-        code[#code + 1] = 'f[' .. quote(key) .. ']=function(dt,i)\n' .. body .. '\nend'
+        code[#code + 1] = 'f[' .. quote(key) .. ']=function(dt,i,car)\n' .. body .. '\nend'
         visiting[key], done[key] = nil, true
     end
     only(d.entrypoints, {init=true,update=true})
@@ -211,9 +258,9 @@ function M.prepare(d)
         assert(phase.scope == 'global', 'entrypoint must be global')
     end
     for key in pairs(d.formula) do compilePhase(key) end
-    local source = 'return function(p,c,s,read,emit,keys)\nlocal v,f={},{}\n' .. table.concat(code, '\n') .. '\nreturn f[' .. quote(d.entrypoints.init) .. '], f[' .. quote(d.entrypoints.update) .. ']\nend'
+    local source = 'return function(p,c,s,read,emit,keys,getCar)\nlocal v,f={},{}\n' .. table.concat(code, '\n') .. '\nreturn f[' .. quote(d.entrypoints.init) .. '], f[' .. quote(d.entrypoints.update) .. ']\nend'
     assert(#source <= 262144, 'compiled definition too large')
-    local environment = {num=num, clamp=clamp, min=math.min, max=math.max}
+    local environment = {num=num, clamp=clamp, min=math.min, max=math.max,safeField=safeField,protectedPath=protectedPath}
     local chunk, err
     if loadstring then
         chunk, err = loadstring(source, '@definition/' .. d.module_id)
@@ -222,7 +269,7 @@ function M.prepare(d)
     assert(chunk, err)
     return {definition=d, factory=chunk(), inputKeys=inputKeys, outputKeys=outputKeys}
 end
-function M.instantiate(plan, readRaw, emit)
+function M.instantiate(plan, readRaw, emit, getCar)
     local d, state, params, constants = plan.definition, {}, {}, {}
     for key, value in pairs(d.parameters) do params[key] = value end
     for key, value in pairs(d.constants) do constants[key] = value end
@@ -243,7 +290,13 @@ function M.instantiate(plan, readRaw, emit)
         end
         return value
     end
-    local init, update = plan.factory(params, constants, state, read, emit, plan.outputKeys)
+    local function getCarSafely()
+        if type(getCar) ~= 'function' then return nil end
+        local ok, car = pcall(getCar, 0)
+        if ok then return car end
+        return nil
+    end
+    local init, update = plan.factory(params, constants, state, read, emit, plan.outputKeys, getCarSafely)
     return {params=params,state=state,debug=state,init=init,update=update}
 end
 return M
